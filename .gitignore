@@ -1,0 +1,10 @@
+# the art, music and sounds come from asset packs that can't be shared (see CREDITS.txt)
+assets/
+itch_page/
+packaging/*.png
+packaging/*.jpg
+build/
+dist/
+__pycache__/
+*.pyc
+.DS_Store
