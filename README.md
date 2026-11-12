@@ -10,13 +10,6 @@ full game.
 
 ![The menu](screenshots/menu.jpg)
 
-| | |
-|---|---|
-| ![A game with 4 players](screenshots/board.jpg) | ![The building tree](screenshots/buildings.jpg) |
-| *A game with 4 players: send pawns to the zones, then build and trade.* | *The building tree: 25 buildings in 5 tiers.* |
-| ![A fight in the lake](screenshots/fight.jpg) | |
-| *Harvest and fight: roll the dice against the mobs for the bonus prize.* | |
-
 ## What is in this repository
 
 The game's code and the trained computer players (`trained_ai`). The art, music and sounds are
@@ -46,6 +39,17 @@ put them in an `assets` folder; otherwise, play the demo on itch.io.
   add `--test` to play it at http://localhost:8000 first.
 - Mac app or Windows program: `python3 -m pip install pyinstaller pillow`, then
   `pyinstaller packaging/tiny_realms.spec`. The result is in the `dist` folder.
+
+## Screenshots
+
+| |
+|---|
+| ![A game with 4 players](screenshots/board.jpg) |
+| *A game with 4 players: send pawns to the zones, then build and trade.* |
+| ![The building tree](screenshots/buildings.jpg) |
+| *The building tree: 25 buildings in 5 tiers.* |
+| ![A fight in the lake](screenshots/fight.jpg) |
+| *Harvest and fight: roll the dice against the mobs for the bonus prize.* |
 
 ## Licence
 
