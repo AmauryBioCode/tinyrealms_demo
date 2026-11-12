@@ -19,6 +19,7 @@ import ai
 import paths
 import art
 import data as D
+import settings
 import sound
 from engine import FIGHT, HOME, SPLIT, TOWN, Game, res_name
 from screen import Screen, draw
@@ -113,7 +114,11 @@ def load_font(size, bold=False):
     return pygame.font.SysFont("avenirnext,helveticaneue,helvetica,arial,dejavusans", size, bold=bold)
 
 
-VIEWERS = ("rules", "catalog", "zones")  # windows that pause the game
+VIEWERS = ("rules", "catalog", "zones", "settings")
+SHAPES = {"red": "circle", "blue": "square", "yellow": "triangle", "purple": "hexagon"}  # under each player's pawns
+COLORS = {name.lower(): color for name, color in D.PLAYER_COLORS}
+# with the colorblind help on: colors that stay apart for every kind of colorblindness (Okabe and Ito)
+COLORBLIND = {"red": (213, 94, 0), "blue": (0, 114, 178), "yellow": (230, 159, 0), "purple": (204, 121, 167)}  # windows that pause the game
 # the Credits page (the same as assets/CREDITS.txt)
 # each line is plain text, or (text, link): the link is shown after the text and opens in the browser
 CREDITS = [
@@ -193,6 +198,10 @@ class App:
         self.tutorial = None   # the tutorial, while it runs
         self.confirm_exit = False  # "Exit game" asks before closing
         self.sounds = sound.Sounds()
+        self.settings = settings.load()
+        self.settings["colorblind"] = False  # the colorblind help starts off each time the game opens
+        self.music_volume = self.settings["music"]
+        self.sounds.volume = self.settings["sounds"]
         self.achievements = achievements.Tracker()
         self.unlocks = []  # achievements just unlocked, shown one after the other: [key, name, time shown]
         self.walking = []  # where the pawns walking in this frame are going
@@ -354,9 +363,56 @@ class App:
         self.canvas.blit(image, rect)
         return rect
 
-    def ring(self, x, y, color, width=34):
-        """A colored ring under a character, showing its owner."""
-        draw.ellipse(self.canvas, color, (x - width // 2, y - 6, width, 12), 3)
+    def ring(self, x, y, color, width=34, team=None):
+        """A colored shape under a character, showing its owner: Red a circle, Blue a square, Yellow a
+        triangle, Purple a hexagon, so players can be told apart without the colors."""
+        shape = SHAPES.get(team, "circle")
+        y -= 5  # centered on the pawn's feet, not under them
+        if shape == "circle":
+            draw.ellipse(self.canvas, color, (x - width // 2, y - 6, width, 12), 3)
+            return
+        half, depth = width // 2, 6
+        if shape == "square":
+            points = [(x - half + 2, y - depth), (x + half - 2, y - depth), (x + half - 2, y + depth),
+                      (x - half + 2, y + depth)]
+        elif shape == "triangle":
+            points = [(x, y - depth - 4), (x + half + 1, y + depth - 1), (x - half - 1, y + depth - 1)]
+        else:  # hexagon
+            points = [(x - half, y), (x - half // 2, y - depth), (x + half // 2, y - depth), (x + half, y),
+                      (x + half // 2, y + depth), (x - half // 2, y + depth)]
+        draw.lines(self.canvas, color, True, points, 3)
+        for point in points:  # rounded corners, without gaps
+            draw.circle(self.canvas, color, point, 1.5)
+
+    def player_mark(self, team, x, y, size, color, outline=None):
+        """A player's shape, filled, centered on (x, y): next to names and fight bonuses."""
+        shape = SHAPES.get(team, "circle")
+        r = size / 2
+        if shape == "circle":
+            if outline:
+                draw.circle(self.canvas, outline, (x, y), r + 1.5)
+            draw.circle(self.canvas, color, (x, y), r)
+            return
+        if shape == "square":
+            r *= 0.88
+            points = [(x - r, y - r), (x + r, y - r), (x + r, y + r), (x - r, y + r)]
+        elif shape == "triangle":
+            points = [(x, y - r * 1.1), (x + r * 1.1, y + r * 0.85), (x - r * 1.1, y + r * 0.85)]
+        else:
+            points = [(x + r * math.cos(a * math.pi / 3), y + r * math.sin(a * math.pi / 3)) for a in range(6)]
+        if outline:
+            draw.polygon(self.canvas, outline, points, 3)
+        draw.polygon(self.canvas, color, points)
+
+    def player_name(self, player, text, pos, size, color, bold=True, anchor="midleft"):
+        """A player's name in their color; with the colorblind help on, their shape stands in front of it."""
+        x, y = pos
+        if self.settings["colorblind"]:
+            mark = round(size * 0.8)
+            line_y = y if anchor.startswith("mid") else y + self.font(size, bold).get_height() // 2
+            self.player_mark(player.team, x + mark // 2, line_y, mark, color, TABLE_DARK)
+            x += mark + 6
+        self.text(text, (x, y), size, color, bold, anchor)
 
     def res_cost(self, cost, x, y, have=None, size=20):
         """Draw a cost as icons and numbers, in red what the player can't pay."""
@@ -419,6 +475,8 @@ class App:
 
     def play_music(self, track):
         """Loop assets/music/<track>.ogg, fading from one piece to the next. Silent if sound is off."""
+        if track == "game" and self.settings["track"] != "usual":
+            track = self.settings["track"]  # the chosen piece plays during the game; the menu keeps its own
         if getattr(self, "music_track", None) == track:
             return
         self.music_track = track
@@ -458,7 +516,7 @@ class App:
         elif key == pygame.K_ESCAPE and self.modal:
             self.modal = None
         elif key == pygame.K_ESCAPE and self.state == "menu" and self.page != "start":
-            self.page = {"players": "mode", "mode": "start"}[self.page]
+            self.page = {"players": "mode", "mode": "start"}.get(self.page, "start")
         elif key == pygame.K_ESCAPE:
             self.toggle_fullscreen()
         elif key == pygame.K_r and self.state == "game":
@@ -675,7 +733,7 @@ class App:
         ground = art.menu_ground(W, H) if art.menu_actors() else None
         picture = ground or art.menu_picture(W, H)
         if ground:  # the picture comes alive: its people, sheep and trees move
-            c.blit(ground, (0, 0))
+            c.blit_opaque(ground, (0, 0))
             k = W / 2560
             for a in art.menu_actors():
                 index = (int(self.clock_time * a["fps"]) + a["start"]) % a["frames"]
@@ -717,15 +775,18 @@ class App:
         if self.page == "start":
             self.button((W // 2 - 140, 470, 280, 64), "Start", lambda: setattr(self, "page", "mode"),
                         primary=True, size=26)
-            self.button((W // 2 - 110, 552, 220, 48), "Achievements", lambda: setattr(self, "page", "achievements"),
+            self.button((W // 2 - 110, 548, 220, 48), "Achievements", lambda: setattr(self, "page", "achievements"),
                         size=20)
-            self.button((W // 2 - 110, 616, 220, 48), "Credits", lambda: setattr(self, "page", "credits"), size=20)
+            self.button((W // 2 - 110, 604, 220, 48), "Settings", lambda: setattr(self, "page", "settings"), size=20)
+            self.button((W // 2 - 110, 660, 220, 48), "Credits", lambda: setattr(self, "page", "credits"), size=20)
             if not WEB:  # a web page can't close itself
-                self.button((W // 2 - 110, 680, 220, 48), "Exit game", self.quit_game, size=20)
+                self.button((W // 2 - 110, 716, 220, 48), "Exit game", self.quit_game, size=20)
         elif self.page == "achievements":
             self.draw_achievements_page()
         elif self.page == "credits":
             self.draw_credits_page()
+        elif self.page == "settings":
+            self.draw_settings(lambda: setattr(self, "page", "start"))
         elif self.page == "mode":
             self.draw_mode_page()
         else:
@@ -969,10 +1030,9 @@ class App:
             self.walking.append(pawn.location)  # footsteps play while someone walks
         anim = art.RUN if walking else art.IDLE
         index = int(self.clock_time * (12 if walking else 8)) + pawn.uid * 3
-        self.ring(px, py, owner.color, ring)
+        chosen = pawn.uid == self.selected  # the chosen pawn's shape turns yellow
+        self.ring(px, py, (255, 240, 120) if chosen else owner.color, ring, owner.team)
         rect = self.draw_unit(pawn.kind, owner.team, anim, index, px, py, height, left, pawn.resting)
-        if pawn.uid == self.selected:
-            draw.ellipse(self.canvas, (255, 240, 120), (px - 15, py - 4, 30, 8), 2)
         click = rect.inflate(-4, -10)
         if pawn.leaving:
             top = py - 40
@@ -1002,18 +1062,18 @@ class App:
         g = self.game
         waiting_on = g.phase in ("deploy", "actions") or g.harvest_stage in ("stance", "choice")
         is_active = waiting_on and g.active == player.pid
-        self.panel(rect, PAPER, ACCENT_LIGHT if is_active else TABLE_DARK)
-        if is_active:
+        if is_active:  # the panel itself is in the board's picture
             draw.rect(c, ACCENT_LIGHT, rect, 4, border_radius=10)
         head = pygame.Rect(rect.x + 4, rect.y + 5, rect.w - 8, 34)
-        band = art.ribbon(player.team, head.w, head.h)
-        if band:
-            c.blit(band, head)
-        else:
-            draw.rect(c, player.color, head, border_radius=7)
-        self.text(player.name, (head.x + 30, head.centery), 14, CREAM, True, "midleft")
+        self.player_mark(player.team, head.x + 40, head.centery, 12, CREAM)
+        self.text(player.name, (head.x + 52, head.centery), 14, CREAM, True, "midleft")
         c.blit(art.resource_icon("gold", 22), (head.right - 72, head.y + 5))
         self.text(player.gold, (head.right - 49, head.centery), 17, CREAM, True, "midleft")
+        income = player.building_sum("gold_per_turn")
+        if income:
+            self.income_badge(head.right - 66, head.y + 1, income)
+            self.tips.append((pygame.Rect(head.right - 72, head.y, 50, head.h),
+                              ("Gold", f"+{income} gold each turn from {player.name}'s buildings.")))
         buildings, pawns = g.victory_points(player.pid)[:2]
         self.text(f"{buildings + pawns} VP", (head.right - 78, head.centery), 15, CREAM, True, "midright")
         self.tips.append((pygame.Rect(head.right - 130, head.y, 52, head.h),
@@ -1027,10 +1087,18 @@ class App:
             n = player.res[r]
             c.blit(art.resource_icon(r, 21) if n else art.faded_icon(r, 21), (x, y))
             self.text(n, (x + 25, y + 11), 15, INK if n else MUTED, n > 0, "midleft")
-            self.tips.append((pygame.Rect(x, y, 48, 22), (D.RESOURCES[r][0], "")))
+            made = sum(D.BUILDINGS[b].get("produce", {}).get(r, 0) for b in player.buildings)
+            if made:
+                self.income_badge(x + 9, y - 5, made)
+                givers = ", ".join(D.BUILDINGS[b]["name"] for b in player.buildings
+                                   if r in D.BUILDINGS[b].get("produce", {}))
+                tip = (D.RESOURCES[r][0], f"+{made} {D.RESOURCES[r][0]} each turn, from: {givers}.")
+            else:
+                tip = (D.RESOURCES[r][0], "")
+            self.tips.append((pygame.Rect(x, y, 48, 22), tip))
 
-        plot = pygame.Rect(rect.x + 6, rect.y + 92, rect.w - 12, rect.h - 146)
-        self.draw_plot(player, plot)
+        plot = self.plot_rect(rect)
+        self.plot_tips(player, plot)
         if g.first == player.pid:
             flag = pygame.Rect(plot.x + 6, plot.y + 6, 88, 20)
             draw.rect(c, TABLE_DARK, flag, border_radius=6)
@@ -1050,6 +1118,14 @@ class App:
             self.draw_home_pawns(home, strip.x + 22, strip.w - 30)
         else:
             self.text("Nobody home", strip.center, 13, MUTED, False, "center")
+
+    def income_badge(self, x, y, n):
+        """A little green +n: what a building gives each turn."""
+        c = self.canvas
+        tag = pygame.Rect(x, y, 19, 12)
+        draw.rect(c, (48, 120, 60), tag, border_radius=5)
+        draw.rect(c, CREAM, tag, 1, border_radius=5)
+        self.text(f"+{n}", (tag.centerx, tag.centery), 10, CREAM, True, "center")
 
     def draw_pawn_count(self, player, plot):
         """How many pawns this player has, out of the most allowed."""
@@ -1159,10 +1235,21 @@ class App:
             small = art.building_at(style, player.color, 68, 79)
             rect = small.get_rect(midbottom=(sx, sy + th // 2 + 2))
             c.blit(small, rect)
-            if kind == "hall":
-                tip = ("Town Hall", "Your home town.")
-            else:
-                tip = (D.BUILDINGS[kind]["name"], D.BUILDINGS[kind]["desc"])
+
+    def plot_tips(self, player, plot):
+        """What each building in a realm does, when hovered (the buildings are in the board's picture)."""
+        tw, th, grid = 66, 33, 4
+        top = plot.bottom - grid * th - 12
+        cells = ["hall"] + list(player.buildings)
+        order = [(i, j) for s in range(grid * 2 - 1) for i in range(grid) for j in range(grid) if i + j == s]
+        slots = sorted(order, key=lambda ij: (max(abs(ij[0] - 1.5), abs(ij[1] - 1.5)), ij))
+        for (i, j), kind in zip(slots, cells):
+            sx = plot.centerx + (i - j) * tw // 2
+            sy = top + (i + j) * th // 2 + th // 2 + 4
+            rect = pygame.Rect(0, 0, 68, 79)
+            rect.midbottom = (sx, sy + th // 2 + 2)
+            tip = ("Town Hall", "Your home town.") if kind == "hall" else (D.BUILDINGS[kind]["name"],
+                                                                          D.BUILDINGS[kind]["desc"])
             self.tips.append((rect.inflate(-10, -16), tip))
 
     # ---- zones and the Town -------------------------------------------------
@@ -1214,11 +1301,7 @@ class App:
 
     def draw_env(self, env, rect):
         """A zone: its picture, what it gives, its prize, its mob and its event."""
-        c = self.canvas
-        img = art.environment(env.eid, rect.w, rect.h)
-        c.blit(img, rect)
-        draw.rect(c, TABLE_DARK, rect, 2, border_radius=8)
-        width = self.font(15, True).size(env.name)[0]
+        width = self.font(15, True).size(env.name)[0]  # the zone's picture is in the board's picture
         self.canvas.shade((rect.x + 3, rect.y + 3, width + 12, 21), (40, 28, 22, 190), 6)
         self.text(env.name, (rect.x + 9, rect.y + 13), 15, CREAM, True, "midleft")
         g = self.game
@@ -1314,12 +1397,17 @@ class App:
         x = chip.x + 62
         lines = []
         vs_mob = bool(g.known_mob(env))
+        marks = self.settings["colorblind"]
         for p in present:
             value = g.strength(p.pid, env.eid, vs_mob)
-            pill = pygame.Rect(x, chip.y + 3, 30, 17)
+            pill = pygame.Rect(x, chip.y + 3, 42 if marks else 30, 17)
             draw.rect(self.canvas, p.color, pill, border_radius=6)
-            self.text(f"+{value}", pill.center, 12, CREAM, True, "center")
-            x += 32
+            if marks:
+                self.player_mark(p.team, pill.x + 10, pill.centery, 10, CREAM)
+                self.text(f"+{value}", (pill.centerx + 6, pill.centery), 12, CREAM, True, "center")
+            else:
+                self.text(f"+{value}", pill.center, 12, CREAM, True, "center")
+            x += pill.w + 2
             dice = g.dice_count(p.pid, env.eid)
             roll = f"best of {dice} dice" if dice > 1 else "a die"
             lines.append(f"{p.name}: {roll} + {value} ({self.bonus_text(p.pid, env.eid, vs_mob)}).")
@@ -1359,7 +1447,11 @@ class App:
         self.draw_top_buttons()
 
     def draw_top_buttons(self):
-        """The Zones, Buildings, Rules and Exit game buttons."""
+        """The Settings, Zones, Buildings, Rules and Exit game buttons."""
+        rect = pygame.Rect(W - 478, 6, 36, 32)
+        self.button(rect, "", self.open_settings, size=14,
+                    tip=("Settings", "Music and sound volume, the music, and help for colorblind players."))
+        self.draw_speaker(rect.centerx, rect.centery, INK)
         self.button((W - 334, 6, 128, 32), "Buildings", self.open_catalog, size=14, icon="hammer",
                     tip=("Buildings", "See every building and what it costs, at any time."))
         self.button((W - 202, 6, 86, 32), "Rules", self.open_rules, size=14, icon="scroll")
@@ -1367,6 +1459,86 @@ class App:
                     tip=("Exit game", "Stop this game and go back to the menu. You will be asked first."))
         self.button((W - 436, 6, 96, 32), "Zones", self.open_zones, size=14,
                     tip=("Zones", "See the resources, prizes and monsters each zone can have."))
+
+    def open_settings(self):
+        """Open or close the Settings window."""
+        if self.modal == "settings":
+            self.close_viewer()
+        else:
+            self.back_to = self.modal
+            self.modal = "settings"
+
+    def draw_speaker(self, x, y, color):
+        """A small loudspeaker, for the Settings button."""
+        c = self.canvas
+        draw.polygon(c, color, [(x - 9, y - 4), (x - 4, y - 4), (x + 2, y - 9), (x + 2, y + 9), (x - 4, y + 4),
+                                (x - 9, y + 4)])
+        for r in (6, 10):
+            draw.arc(c, color, (x + 2 - r, y - r, 2 * r, 2 * r), -0.9, 0.9, 2)
+
+    def change_setting(self, key, value):
+        """Change a setting, use it at once and save it."""
+        self.settings[key] = value
+        settings.save(self.settings)
+        if key == "music":
+            self.music_volume = value
+            if pygame.mixer.get_init() and not getattr(self, "muted", False):
+                pygame.mixer.music.set_volume(value)
+        elif key == "sounds":
+            self.sounds.volume = value
+            self.sounds.play("click")
+        elif key == "track":
+            self.play_music("game" if self.game else "menu")
+        elif key == "colorblind":
+            self.board_key = None  # the board's picture is drawn again
+
+    def draw_settings(self, close=None):
+        """The Settings window: volumes, the music, and the colorblind help."""
+        self.dim()
+        rect = pygame.Rect(W // 2 - 330, H // 2 - 200, 660, 400)
+        self.panel(rect)
+        self.text("Settings", (rect.x + 24, rect.y + 16), 24, INK, True)
+        self.button((rect.right - 104, rect.y + 16, 90, 32), "Close", close or self.close_viewer, size=14)
+        y = rect.y + 76
+        for key, label in (("music", "Music volume"), ("sounds", "Sound effects")):
+            self.text(label, (rect.x + 30, y + 16), 17, INK, True, "midleft")
+            level = round(self.settings[key] * 10)
+            x = rect.x + 230
+            self.button((x, y, 34, 32), "-", lambda k=key, v=level: self.change_setting(k, max(0, v - 1) / 10),
+                        level > 0, size=18)
+            for i in range(10):
+                bar = pygame.Rect(x + 44 + i * 26, y + 22 - (i + 1) * 2, 20, 10 + (i + 1) * 2)
+                draw.rect(self.canvas, ACCENT if i < level else PAPER_DARK, bar, border_radius=3)
+                draw.rect(self.canvas, TABLE_DARK, bar, 1, border_radius=3)
+                self.hot.append((bar.inflate(6, 12), lambda k=key, v=i + 1: self.change_setting(k, v / 10)))
+            self.button((x + 312, y, 34, 32), "+", lambda k=key, v=level: self.change_setting(k, min(10, v + 1) / 10),
+                        level < 10, size=18)
+            self.text(f"{level * 10}%" if level else "Off", (x + 358, y + 16), 15, MUTED, True, "midleft")
+            y += 58
+        self.text("Game music", (rect.x + 30, y + 18), 17, INK, True, "midleft")
+        x = rect.x + 230
+        for key, label in settings.TRACKS:
+            self.button((x, y, 170, 36), label, lambda k=key: self.change_setting("track", k),
+                        primary=self.settings["track"] == key, size=15)
+            x += 180
+        y += 50
+        self.text("Village Medieval Music Pack by Leonardo Calvo.", (rect.x + 230, y), 12, MUTED)
+        y += 40
+        draw.line(self.canvas, MUTED, (rect.x + 24, y), (rect.right - 24, y), 1)
+        y += 18
+        self.text("Colorblind help", (rect.x + 30, y + 18), 17, INK, True, "midleft")
+        on = self.settings["colorblind"]
+        x = rect.x + 230
+        for value, label in ((False, "Off"), (True, "On")):
+            self.button((x, y, 80, 36), label, lambda v=value: self.change_setting("colorblind", v),
+                        primary=on == value, size=15)
+            x += 90
+        y += 66
+        palette = COLORBLIND if on else COLORS
+        for i, team in enumerate(("red", "blue", "yellow", "purple")):  # each player's shape, in its color
+            cx = rect.x + 120 + i * 140
+            self.player_mark(team, cx, y, 22, palette[team])
+            self.text(D.PLAYER_COLORS[i][0], (cx + 18, y), 15, INK, True, "midleft")
 
     def open_rules(self):
         """Open the rules window over whatever is open."""
@@ -1515,8 +1687,7 @@ class App:
         c = self.canvas
         x0 = SIDE_W + 8
         y0 = H - 6 - PRICE_H
-        rect = pygame.Rect(x0, y0, W - 2 * SIDE_W - 16, PRICE_H)
-        self.panel(rect)
+        rect = pygame.Rect(x0, y0, W - 2 * SIDE_W - 16, PRICE_H)  # its paper is in the board's picture
         self.text("Prices today", (rect.x + 12, rect.centery), 13, MUTED, True, "midleft")
         for i, r in enumerate(D.RESOURCE_IDS):
             x = rect.x + 106 + i * 54
@@ -1526,6 +1697,13 @@ class App:
             price = g.prices[r]
             color = GOOD if price > base else BAD if price < base else INK
             self.text(price, (x + 24, y + 11), 15, color, True, "midleft")
+            if price != base:  # an arrow: up when it sells for more than usual, down for less
+                ax = x + 28 + self.font(15, True).size(str(price))[0] + 2
+                up = price > base
+                tip_y, foot = (y + 5, y + 14) if up else (y + 17, y + 8)
+                draw.polygon(c, color, [(ax, foot), (ax + 9, foot), (ax + 4.5, tip_y)])
+            self.tips.append((pygame.Rect(x, y, 50, 22), (D.RESOURCES[r][0],
+                              f"Sells for {price} gold today" + (f" (usually {base})." if price != base else ", as usual."))))
 
     def free_cell(self, cells):
         """The empty place under the Town."""
@@ -1691,11 +1869,10 @@ class App:
     def draw_game(self):
         """The whole board: table, zones, Town, players' panels and the bottom bar."""
         g = self.game
-        wood = art.table()
-        if wood:
-            self.canvas.blit(wood, (0, 0))
-        else:
-            self.canvas.fill(TABLE)
+        palette = COLORBLIND if self.settings["colorblind"] else COLORS
+        for player in g.players:  # the colorblind help changes the players' colors
+            player.color = palette.get(player.team, player.color)
+        self.draw_board_background()
         self.draw_top()
         for player, rect in zip(g.players, self.base_rects()):
             self.draw_base(player, rect)
@@ -1705,6 +1882,44 @@ class App:
         self.draw_town(cells[TOWN])
         self.draw_bottom()
         self.draw_actions(self.free_cell(cells))
+
+    def draw_board_background(self):
+        """The parts of the board that don't move (the table, the zones' pictures, the players' panels and
+        their buildings) are drawn once into a picture, then copied each frame: far less work, which keeps
+        the browser version smooth. The picture is drawn again when a building is added."""
+        g = self.game
+        key = (self.canvas.get_size(), tuple((p.team, p.color, tuple(p.buildings)) for p in g.players),
+               tuple(e.eid for e in g.envs))
+        if getattr(self, "board_key", None) != key:
+            screen, tips = self.canvas, self.tips
+            self.canvas = Screen(screen.get_size(), screen.scale)
+            wood = art.table()
+            if wood:
+                self.canvas.blit(wood, (0, 0))
+            else:
+                self.canvas.fill(TABLE)
+            for player, rect in zip(g.players, self.base_rects()):
+                self.panel(rect, PAPER, TABLE_DARK)
+                head = pygame.Rect(rect.x + 4, rect.y + 5, rect.w - 8, 34)
+                band = art.ribbon(player.team, head.w, head.h)
+                if band:
+                    self.canvas.blit(band, head)
+                else:
+                    draw.rect(self.canvas, player.color, head, border_radius=7)
+                self.draw_plot(player, self.plot_rect(rect))
+            self.panel((SIDE_W + 8, H - 6 - PRICE_H, W - 2 * SIDE_W - 16, PRICE_H))
+            cells = self.env_cells()
+            for env in g.envs:
+                rect = cells[env.eid]
+                self.canvas.blit(art.environment(env.eid, rect.w, rect.h), rect)
+                draw.rect(self.canvas, TABLE_DARK, rect, 2, border_radius=8)
+            self.board_picture, self.board_key = self.canvas, key
+            self.canvas, self.tips = screen, tips
+        pygame.Surface.blit(self.canvas, self.board_picture, (0, 0))
+
+    def plot_rect(self, rect):
+        """Where a player's realm is in their panel."""
+        return pygame.Rect(rect.x + 6, rect.y + 92, rect.w - 12, rect.h - 146)
 
     # ---- modals -------------------------------------------------------------
     def dim(self):
@@ -1859,7 +2074,7 @@ class App:
         """The player's resources, beside the building tree."""
         c = self.canvas
         self.panel(rect, CREAM, MUTED, 8)
-        self.text(f"{p.name}'s resources", (rect.x + 10, rect.y + 8), 14, p.color, True)
+        self.player_name(p, f"{p.name}'s resources", (rect.x + 10, rect.y + 8), 14, p.color, True, "topleft")
         for i, r in enumerate(D.RESOURCE_IDS):  # 4 per row, to leave room for the Farm below
             x = rect.x + 8 + (i % 4) * 48
             y = rect.y + 30 + (i // 4) * 24
@@ -2147,7 +2362,7 @@ class App:
             power = g.strength(other, env.eid, bool(env.mob))
             dice = g.dice_count(other, env.eid)
             roll = f"best of {dice} dice" if dice > 1 else "a die"
-            self.text(f"{o.name}: {roll} + {power}", (rect.x + 40, y), 15, o.color, True)
+            self.player_name(o, f"{o.name}: {roll} + {power}", (rect.x + 40, y), 15, o.color, True, "topleft")
             self.text(self.bonus_text(other, env.eid, bool(env.mob)), (rect.x + 40, y + 20), 13, MUTED)
             if other in contest["stances"]:
                 stance, target = contest["stances"][other]
@@ -2175,9 +2390,12 @@ class App:
             return f"Gives to {self.game.players[target].name}"
         return "Retreats"
 
-    def draw_dice_row(self, label, dice, strength, score, x, y, color, rolling):
+    def draw_dice_row(self, label, dice, strength, score, x, y, color, rolling, player=None):
         """One side's dice, strength and score in a fight."""
-        self.text(label, (x, y + 16), 16, color, True, "midleft")
+        if player:
+            self.player_name(player, label, (x, y + 16), 16, color, True, "midleft")
+        else:
+            self.text(label, (x, y + 16), 16, color, True, "midleft")
         dx = x + 210
         for value in dice:
             flicker = random.Random(int(self.clock_time * 12) + dx + y)
@@ -2220,7 +2438,8 @@ class App:
         for pid, res, qty, who in report["gathers"][:8]:
             player = g.players[pid]
             self.canvas.blit(art.resource_icon(res, 22), (rect.x + 30, y))
-            self.text(f"{player.name}'s {who}: +{qty} {res_name(res)}", (rect.x + 60, y + 2), 15, player.color, True)
+            self.player_name(player, f"{player.name}'s {who}: +{qty} {res_name(res)}", (rect.x + 60, y + 2), 15,
+                             player.color, True, "topleft")
             y += 23
         before = [d for d in report.get("event_dice", []) if d[1] != "Trapped Relic"]
         after = [d for d in report.get("event_dice", []) if d[1] == "Trapped Relic"]
@@ -2233,9 +2452,10 @@ class App:
             self.text(title, (rect.x + 28, y), 15, MUTED, True)
             y += 24
             for roll in report["rolls"]:
-                color = g.players[roll["pid"]].color if " and " not in roll["label"] else INK
+                alone = " and " not in roll["label"]
+                color = g.players[roll["pid"]].color if alone else INK
                 self.draw_dice_row(roll["label"], roll["dice"], roll["strength"], roll["score"],
-                                   rect.x + 30, y, color, rolling)
+                                   rect.x + 30, y, color, rolling, g.players[roll["pid"]] if alone else None)
                 y += 37
             mob = report["mob"]
             if mob:
@@ -2249,8 +2469,8 @@ class App:
             y = self.draw_event_dice(after, rect.x + 30, y - 4)
             for pid, res, qty in report["awards"]:
                 self.canvas.blit(art.resource_icon(res, 22), (rect.x + 30, y + 2))
-                self.text(f"{g.players[pid].name}: +{qty} {res_name(res)} (bonus prize)", (rect.x + 60, y + 3), 15,
-                          g.players[pid].color, True)
+                self.player_name(g.players[pid], f"{g.players[pid].name}: +{qty} {res_name(res)} (bonus prize)",
+                                 (rect.x + 60, y + 3), 15, g.players[pid].color, True, "topleft")
                 y += 26
             for pid in dict.fromkeys(pid for pid, _ in report["wounds"]):
                 names = ", ".join(who for owner, who in report["wounds"] if owner == pid)
@@ -2498,7 +2718,8 @@ class App:
             player = g.players[row["pid"]]
             frame = int(self.clock_time * 8) + rank
             self.draw_unit("peasant", player.team, art.IDLE, frame, rect.x + 56, y + 60, 50)
-            self.text(f"{rank + 1}. {row['name']}", (rect.x + 86, y + 6), 20, player.color, True)
+            self.player_name(player, f"{rank + 1}. {row['name']}", (rect.x + 86, y + 6), 20, player.color, True,
+                             "topleft")
             self.text(f"{row['total']} VP", (rect.x + 590, y + 18), 26, INK, True, "midright")
             detail = "   ".join(f"{name} {value} VP" for name, value in row["lines"])
             detail += f"   ({row['coins']} gold counted)"
@@ -2603,6 +2824,8 @@ class App:
                 self.draw_dismiss()
             if self.modal == "rules":
                 self.draw_rules()
+            elif self.modal == "settings":
+                self.draw_settings()
             elif self.modal == "catalog":
                 self.draw_build(catalog=True)
             elif self.modal == "zones":
@@ -2635,7 +2858,8 @@ class App:
         if window.get_size() != self.pixels:
             self.fit(window.get_size())
             return
-        window.fill(BORDER)
+        if self.view[:2] != (0, 0):
+            window.fill(BORDER)
         window.blit(self.canvas, self.view[:2])
         if self.native:
             self.native.flip()

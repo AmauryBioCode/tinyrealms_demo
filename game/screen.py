@@ -35,6 +35,21 @@ class Screen(pygame.Surface):
             sharp = pygame.transform.smoothscale(image, (math.ceil(w * s), math.ceil(h * s)))
         return super().blit(sharp, (round(pos[0] * s), round(pos[1] * s)), *rest)
 
+    def blit_opaque(self, image, pos):
+        """A picture without any see-through pixel, like the menu's ground: copied without blending, which
+        is several times faster for a picture as big as the screen."""
+        sharp = art.HIRES.get(id(image), image) if self.scale != 1 else image
+        key = ("opaque", id(sharp))
+        if key not in self.veils:
+            if sharp is image and self.scale != 1:
+                w, h = image.get_size()
+                sharp = pygame.transform.smoothscale(image, (math.ceil(w * self.scale), math.ceil(h * self.scale)))
+            try:
+                self.veils[key] = sharp.convert()
+            except pygame.error:  # no window yet
+                self.veils[key] = sharp
+        pygame.Surface.blit(self, self.veils[key], (round(pos[0] * self.scale), round(pos[1] * self.scale)))
+
     def fill(self, color, rect=None, special_flags=0):
         """Fill a canvas rectangle, or everything."""
         area = self.rect(rect) if rect is not None else None
@@ -100,6 +115,13 @@ class draw:
         if not isinstance(s, Screen):
             return pygame.draw.lines(s, color, closed, points, width)
         return pygame.draw.lines(s, color, closed, [s.point(p) for p in points], s.thick(width))
+
+    @staticmethod
+    def arc(s, color, rect, start, stop, width=1):
+        """pygame.draw.arc, scaled."""
+        if not isinstance(s, Screen):
+            return pygame.draw.arc(s, color, rect, start, stop, width)
+        return pygame.draw.arc(s, color, s.rect(rect), start, stop, s.thick(width))
 
     @staticmethod
     def polygon(s, color, points, width=0):
