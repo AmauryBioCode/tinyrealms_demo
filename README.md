@@ -8,6 +8,15 @@ This demo has the tutorial and the normal game (8 or 12 turns, 2 to 4 players). 
 (events, factions, monster abilities, challenges) and a better computer player are coming in the
 full game.
 
+![The menu](screenshots/menu.jpg)
+
+| | |
+|---|---|
+| ![A game with 4 players](screenshots/board.jpg) | ![The building tree](screenshots/buildings.jpg) |
+| *A game with 4 players: send pawns to the zones, then build and trade.* | *The building tree: 25 buildings in 5 tiers.* |
+| ![A fight in the lake](screenshots/fight.jpg) | |
+| *Harvest and fight: roll the dice against the mobs for the bonus prize.* | |
+
 ## What is in this repository
 
 The game's code and the trained computer players (`trained_ai`). The art, music and sounds are
@@ -23,6 +32,7 @@ put them in an `assets` folder; otherwise, play the demo on itch.io.
   `art.py`, `sound.py`, `tutorial.py`, `achievements.py`, `screen.py`.
 - `trained_ai/`: the trained computer players.
 - `packaging/`: the recipes to build the browser version and the Mac or Windows program.
+- `screenshots/`: the pictures in this page.
 - `assets/`: the pictures, music and sounds (not in this repository, see above).
 
 ## Run it from the code
