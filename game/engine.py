@@ -126,7 +126,7 @@ class GameError(Exception):
 
 # ---- the game ---------------------------------------------------------------
 class Game:
-    """The whole game: players, zones, turn phases and every rule. The window (main.py) and the computer players
+    """The whole game: players, zones, turn phases and every rule. The window (app.py) and the computer players
     (ai.py) only call its methods."""
     def __init__(self, players, turns=12, seed=None, events=False, factions=None, mob_abilities=None,
                  challenge=()):

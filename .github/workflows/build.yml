@@ -1,0 +1,51 @@
+# Builds the Mac app and the Windows program on GitHub's computers.
+# Start it by hand in the Actions tab ("Run workflow"), or push a tag such as v1.0
+# to also attach both downloads to a GitHub release.
+name: Build the game
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            zip: TinyRealms-mac.zip
+          - os: windows-latest
+            zip: TinyRealms-windows.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install the tools
+        run: python -m pip install pygame-ce pyinstaller pillow
+      - name: Check the rules
+        run: |
+          python -m pip install pytest
+          python -m pytest -q tests
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+      - name: Build
+        run: pyinstaller --noconfirm packaging/tiny_realms.spec
+      - name: Pack the Mac app
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent "dist/Tiny Realms.app" "${{ matrix.zip }}"
+      - name: Pack the Windows program
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path "dist/Tiny Realms" -DestinationPath "${{ matrix.zip }}"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.zip }}
+          path: ${{ matrix.zip }}
+      - name: Add to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.zip }}

@@ -15,6 +15,16 @@ The game's code and the trained computer players (`trained_ai`). The art, music 
 listed in `CREDITS.txt`, with links to each pack. To run the game from this code, get the packs and
 put them in an `assets` folder; otherwise, play the demo on itch.io.
 
+## Folders
+
+- `main.py`: starts the game.
+- `game/`: the game's code: `app.py` (the window and screens), `engine.py` (the rules), `data.py`
+  (pawns, buildings, mobs: change numbers here to rebalance), `ai.py` (the computer players),
+  `art.py`, `sound.py`, `tutorial.py`, `achievements.py`, `screen.py`.
+- `trained_ai/`: the trained computer players.
+- `packaging/`: the recipes to build the browser version and the Mac or Windows program.
+- `assets/`: the pictures, music and sounds (not in this repository, see above).
+
 ## Run it from the code
 
 - Mac: double-click `play.command` (it installs pygame-ce the first time).

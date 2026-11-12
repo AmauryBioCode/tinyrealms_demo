@@ -15,8 +15,8 @@ import sys
 import zipfile
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-CODE = ["main.py", "engine.py", "achievements.py", "ai.py", "art.py", "data.py", "screen.py", "sound.py", "tutorial.py"]
-FOLDERS = ["assets", "trained_ai"]
+CODE = ["main.py"]  # it starts the game, whose code is in the game folder
+FOLDERS = ["game", "assets", "trained_ai"]
 SOURCE = os.path.join(ROOT, "build", "web_src", "tinyrealms")  # what pygbag packs
 ZIP = os.path.join(ROOT, "dist", "TinyRealms-web.zip")
 

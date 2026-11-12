@@ -422,7 +422,7 @@ class Tutorial:
         return any(r.collidepoint(pos) for r in self.allowed)
 
     def quit(self):
-        """Quit tutorial asks first (see main.App.draw_exit_confirm)."""
+        """Quit tutorial asks first (see app.App.draw_exit_confirm)."""
         self.app.confirm_exit = "tutorial"
 
     def finish(self):

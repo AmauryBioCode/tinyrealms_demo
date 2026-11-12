@@ -7,6 +7,7 @@ import random
 import pygame
 
 import data as D
+import paths
 
 OUTLINE = (44, 32, 26)
 _cache = {}
@@ -581,7 +582,7 @@ def draw_style(s, style, cx, by, color):
 TILE_W, TILE_H = 60, 30
 
 
-ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+ROOT = os.path.join(paths.ROOT, "assets")
 ASSETS = os.path.join(ROOT, "buildings")
 
 

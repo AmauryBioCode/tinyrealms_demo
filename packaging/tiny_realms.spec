@@ -8,7 +8,7 @@ ICON = os.path.join(SPECPATH, "icon.png")
 
 a = Analysis(
     [os.path.join(ROOT, "main.py")],
-    pathex=[ROOT],
+    pathex=[ROOT, os.path.join(ROOT, "game")],
     datas=[(os.path.join(ROOT, "assets"), "assets"), (os.path.join(ROOT, "trained_ai"), "trained_ai")],
     excludes=["pytest", "tkinter", "numpy"],
 )

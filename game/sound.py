@@ -5,10 +5,11 @@ import os
 
 import pygame
 
+import paths
 from engine import HOME, TOWN, YIELD
 
 # ---- which sound for what ---------------------------------------------------
-FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "sounds")
+FOLDER = os.path.join(paths.ROOT, "assets", "sounds")
 
 VOLUME = {  # some sounds are recorded louder than others
     "click": 0.6, "recruit": 0.8, "heal": 0.45, "dice": 0.55, "step_rock": 0.4, "step_wood": 0.5,
@@ -16,7 +17,7 @@ VOLUME = {  # some sounds are recorded louder than others
 # fight sounds play at full volume, and the music steps back while they play
 FIGHT = {"punch", "slash", "fire", "poison", "arrow", "claw", "bite", "impact", "bones", "mob_death",
          "wound", "flee", "hit"}
-# footsteps while a pawn walks (main.App.footsteps), by where it goes; home is grass too
+# footsteps while a pawn walks (app.App.footsteps), by where it goes; home is grass too
 STEPS = {HOME: "step_grass", "forest": "step_grass", "plains": "step_grass", "ruins": "step_grass", "mountain": "step_rock",
          "mine": "step_rock", "lake": "step_water", "swamp": "step_water", TOWN: "step_wood"}
 # the most striking pawn in a fight decides its sound; any other pawn punches

@@ -7,10 +7,11 @@ import json
 import os
 
 import data as D
+import paths
 from engine import FIGHT, HOME, SPLIT, TOWN, YIELD
 
 # ---- the numbers behind every choice (weights) ------------------------------
-TRAINED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "trained_ai", "trained_ai.json")
+TRAINED_FILE = os.path.join(paths.ROOT, "trained_ai", "trained_ai.json")
 
 DEFAULT_WEIGHTS = {
     # value of buildings, per turn left unless noted
