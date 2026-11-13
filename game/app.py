@@ -1445,7 +1445,7 @@ class App:
         rect = pygame.Rect(W - 478, 6, 36, 32)
         self.button(rect, "", self.open_settings, size=14,
                     tip=("Settings", "Music and sound volume, the music, and help for colorblind players."))
-        self.draw_speaker(rect.centerx, rect.centery, INK)
+        self.draw_gear(rect.centerx, rect.centery, INK)
         self.button((W - 334, 6, 128, 32), "Buildings", self.open_catalog, size=14, icon="hammer",
                     tip=("Buildings", "See every building and what it costs, at any time."))
         self.button((W - 202, 6, 86, 32), "Rules", self.open_rules, size=14, icon="scroll")
@@ -1462,13 +1462,15 @@ class App:
             self.back_to = self.modal
             self.modal = "settings"
 
-    def draw_speaker(self, x, y, color):
-        """A small loudspeaker, for the Settings button."""
-        c = self.canvas
-        draw.polygon(c, color, [(x - 9, y - 4), (x - 4, y - 4), (x + 2, y - 9), (x + 2, y + 9), (x - 4, y + 4),
-                                (x - 9, y + 4)])
-        for r in (6, 10):
-            draw.arc(c, color, (x + 2 - r, y - r, 2 * r, 2 * r), -0.9, 0.9, 2)
+    def draw_gear(self, x, y, color):
+        """A small cogwheel, for the Settings button: sound and colors."""
+        points = []
+        for i in range(24):  # 6 teeth: each one is 4 points, 2 out and 2 in
+            angle = (i + 0.5) * math.pi / 12
+            r = 11.5 if i % 4 in (1, 2) else 7.5
+            points.append((x + r * math.cos(angle), y + r * math.sin(angle)))
+        draw.polygon(self.canvas, color, points)
+        draw.circle(self.canvas, CREAM, (x, y), 3.6)
 
     def change_setting(self, key, value):
         """Change a setting, use it at once and save it."""
