@@ -802,16 +802,10 @@ class App:
         box = pygame.Rect(W // 2 - 300, 150, 600, 530 if self.advanced else 400)
         self.panel(box)
         self.text("Choose a game", (box.centerx, box.y + 32), 24, INK, True, "center")
-        normal = ("Normal game", "The rules as they are.")
-        advanced = ("Advanced game", "Choose extra rules: events that last the whole game, factions, "
-                                     "monster abilities and challenges. They all start off.")
         self.button((box.x + 40, box.y + 64, 250, 56), "Normal game", lambda: setattr(self, "advanced", False),
-                    primary=not self.advanced, size=18, tip=normal)
-        if DEMO:
-            advanced = ("Advanced game", "Coming soon in the full game: events that last the whole game, factions, "
-                                         "monster abilities and challenges.")
+                    primary=not self.advanced, size=18)
         self.button((box.right - 290, box.y + 64, 250, 56), "Advanced game", lambda: setattr(self, "advanced", True),
-                    not DEMO, primary=self.advanced, size=18, tip=advanced)
+                    not DEMO, primary=self.advanced, size=18)
         if DEMO:
             self.draw_burst("Coming soon!", (box.right + 18, box.y + 92))
         y = box.y + 150
@@ -885,7 +879,7 @@ class App:
             self.draw_name_field(i, pygame.Rect(box.x + 80, y + 6, 190, 38))
             for k, (label, value, tip) in enumerate(SEAT_CHOICES):
                 self.button((box.x + 284 + k * 100, y + 3, 92, 44), label, lambda i=i, v=value: self.set_seat(i, v),
-                            primary=self.seats[i] == value, size=15, tip=tip)
+                            primary=self.seats[i] == value, size=15)
             if factions:
                 choice = self.seat_factions[i]
                 label = D.FACTIONS[choice]["name"] if choice else "Random faction"
